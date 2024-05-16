@@ -2,6 +2,7 @@ import json
 import boto3
 import botocore.config
 from datetime import datetime
+import botocore
 
 def generate_blog(blog_topic:str)->str:
     """
@@ -35,6 +36,7 @@ def generate_blog(blog_topic:str)->str:
         response = bedrock_client.invoke_model( modelId= "meta.llama3-8b-instruct-v1:0",
             contentType= "application/json",
             accept= "application/json",
+            
             body =json.dumps(body)
         )
 
@@ -46,7 +48,7 @@ def generate_blog(blog_topic:str)->str:
         print(f"error occured while generating the blog : {e}")
 
 
-def push_content_to_s3(content,s3_key,s3_bucket_name)->None:
+def push_content_to_s3(content, s3_key, s3_bucket_name) -> None:
     """
     This function uploads the generated blog post content to an S3 bucket.
 
@@ -55,16 +57,22 @@ def push_content_to_s3(content,s3_key,s3_bucket_name)->None:
         s3_key (str): The key (file path) for the object in the S3 bucket.
         s3_bucket_name (str): The name of the S3 bucket.
     """
+    s3_client = boto3.client('s3')
     try:
-        s3_client = boto3.client('s3')
         s3_client.put_object(
-            Bucket = s3_bucket_name,
-            Key = s3_key,
-            Body = content
+            Bucket=s3_bucket_name,
+            Key=s3_key,
+            Body=content.encode('utf-8')
         )
-        print("Content Saved to S3 bucket")
-    except Exception as e:
-        print(f"Error occured while saving the file to S3 Bucket : {e}")
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'NoSuchBucket':
+            print(f"The bucket '{s3_bucket_name}' does not exist.")
+        else:
+            print(f"Error occured while saving the file to S3 Bucket: {e}")
+    else:
+        print("Content saved to S3 bucket successfully.")
+
 
 def lambda_handler(event, context):
     """
